@@ -57,3 +57,90 @@
                 container.style.display = "none";
                 icon.textContent = "+";
             } else {
+                container.style.display = "block";
+                icon.textContent = "−";
+            }
+        }
+
+        fetch('data.xlsx').then(res => {
+            if (!res.ok) throw new Error("Soubor nenalezen");
+            return res.arrayBuffer();
+        }).then(data => {
+            const workbook = XLSX.read(data, {type: 'array'});
+            const firstSheetName = workbook.SheetNames[0];
+            const rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName]);
+            
+            const categories = {};
+            rows.forEach(row => {
+                const cat = row['Oblast 2'];
+                if (!cat) return;
+                if (!categories[cat]) categories[cat] = { items: [], totalPct: 0, count: 0 };
+                
+                categories[cat].items.push(row);
+                
+                let pctValue = row['% Hotovo'];
+                let parsedPct = 0;
+                if (typeof pctValue === 'number') {
+                    parsedPct = pctValue <= 1 ? pctValue * 100 : pctValue;
+                } else if (typeof pctValue === 'string') {
+                    parsedPct = parseFloat(pctValue.replace('%', ''));
+                    if (isNaN(parsedPct)) parsedPct = 0;
+                }
+                categories[cat].totalPct += parsedPct;
+                categories[cat].count++;
+            });
+
+            let html = '';
+            for (const [name, catData] of Object.entries(categories)) {
+                const avgPct = catData.count > 0 ? Math.round(catData.totalPct / catData.count) : 0;
+                
+                html += `<div class="category">
+                            <div class="category-header" onclick="toggleCategory(this)">
+                                <div class="category-title-wrapper">
+                                    <h2>${name}</h2>
+                                    <span class="cat-pct-badge">Celkem hotovo: ${avgPct} %</span>
+                                </div>
+                                <span class="toggle-icon">+</span>
+                            </div>
+                            <div class="agendas-container">`;
+                
+                catData.items.forEach(item => {
+                    const color = item['Semafor'] ? String(item['Semafor']).trim() : '';
+                    const phase = item['Fáze'] ? String(item['Fáze']).trim() : 'Fáze neurčena';
+                    
+                    let itemPct = item['% Hotovo'];
+                    let finalItemPct = 0;
+                    if (typeof itemPct === 'number') {
+                        finalItemPct = itemPct <= 1 ? itemPct * 100 : itemPct;
+                    } else if (typeof itemPct === 'string') {
+                        finalItemPct = parseFloat(itemPct.replace('%', ''));
+                        if (isNaN(finalItemPct)) finalItemPct = 0;
+                    }
+
+                    html += `<div class="agenda ${color}">
+                        <div class="agenda-header">
+                            <div class="agenda-title-wrapper">
+                                <h3>${item['Agenda'] || 'Neznámá agenda'}</h3>
+                                <span class="agenda-pct">${Math.round(finalItemPct)} %</span>
+                            </div>
+                            <span class="phase-badge">${phase}</span>
+                        </div>
+                        <div class="grid">
+                            <div><strong>Co se udělalo:</strong>${item['Co se udělalo'] || '—'}</div>
+                            <div><strong>Co se udělá:</strong>${item['Co se udělá'] || '—'}</div>
+                            <div><strong>Rozhodnutí / Rizika:</strong>${item['Rozhodnutí / Rizika'] || '—'}</div>
+                        </div>
+                    </div>`;
+                });
+                html += `</div></div>`;
+            }
+            document.getElementById('app').innerHTML = html;
+        }).catch(err => {
+            document.getElementById('app').innerHTML = '';
+            document.getElementById('error-msg').style.display = 'block';
+            document.getElementById('error-msg').innerHTML = 'Chyba při načítání dat. Ujistěte se, že soubor "data.xlsx" je nahrán správně.';
+            console.error(err);
+        });
+    </script>
+</body>
+</html>
