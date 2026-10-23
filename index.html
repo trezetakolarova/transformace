@@ -10,31 +10,29 @@
         h1 { color: #1a237e; text-align: center; border-bottom: 2px solid #3f51b5; padding-bottom: 15px; margin-bottom: 30px; }
         .category { background: white; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow: hidden; }
         
+        /* Styl pro rozbalovací hlavičku kategorie */
         .category-header { background: #ffffff; padding: 15px 20px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.3s; }
         .category-header:hover { background: #f8f9fa; }
-        .category-title-wrapper { display: flex; align-items: center; gap: 15px; }
         .category-header h2 { margin: 0; color: #2c3e50; font-size: 1.4em; }
+        .toggle-icon { font-size: 1.2em; color: #7f8c8d; font-weight: bold; }
         
-        .cat-pct-badge { background: #e3f2fd; color: #1565c0; padding: 5px 12px; border-radius: 20px; font-size: 0.9em; font-weight: bold; border: 1px solid #bbdefb; }
-        .toggle-icon { font-size: 1.2em; color: #7f8c8d; font-weight: bold; margin-left: 15px; }
-        
+        /* Kontejner pro agendy - výchozí stav skrytý */
         .agendas-container { display: none; padding: 0 20px 20px 20px; border-top: 1px solid #eee; }
         
         .agenda { border-left: 6px solid #bdc3c7; margin: 15px 0; padding: 15px; background: #fafafa; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         
-        /* Semafory z tvého nového sloupce "Semafor" v Excelu */
-        .agenda.Zelená { border-color: #2ecc71; }
-        .agenda.Žlutá { border-color: #f1c40f; }
-        .agenda.Červená { border-color: #e74c3c; }
-        .agenda.Šedá { border-color: #95a5a6; }
+        /* Barvy podle fáze/semaforu (Radek's style) */
+        .agenda.Hotovo { border-color: #2ecc71; } /* Zelená */
+        .agenda.Probíhá { border-color: #f1c40f; } /* Žlutá */
+        .agenda.Řeší { border-color: #f1c40f; } /* Žlutá */
+        .agenda.Pozastaveno { border-color: #e74c3c; } /* Červená */
+        .agenda.V { border-color: #95a5a6; } /* Šedá (V plánu) */
 
         .agenda-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 10px; }
-        .agenda-title-wrapper { display: flex; align-items: center; gap: 15px; }
         .agenda-header h3 { margin: 0; color: #34495e; font-size: 1.2em; }
+        .status-badge { padding: 5px 12px; border-radius: 20px; font-size: 0.85em; font-weight: bold; background: #e0e0e0; color: #333; text-transform: uppercase; letter-spacing: 0.5px; }
         
-        .agenda-pct { background: #f0f4c3; color: #827717; padding: 4px 8px; border-radius: 4px; font-size: 0.85em; font-weight: bold; }
-        .phase-badge { padding: 5px 12px; border-radius: 20px; font-size: 0.85em; font-weight: bold; background: #e0e0e0; color: #333; text-transform: uppercase; letter-spacing: 0.5px; }
-        
+        /* Grid layout pro Radkovy 3 kolonky (bez procent) */
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; font-size: 0.95em; }
         .grid div { background: #fff; padding: 15px; border-radius: 6px; border: 1px solid #e0e0e0; }
         strong { color: #2c3e50; display: block; margin-bottom: 8px; font-size: 0.9em; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #f0f0f0; padding-bottom: 5px;}
@@ -46,10 +44,11 @@
     <div class="container">
         <h1>SobIT Transformační Tracker</h1>
         <div id="error-msg"></div>
-        <div id="app">Načítám data z Excelu (data_2.xlsx)...</div>
+        <div id="app">Načítám data z Excelu (data.xlsx)...</div>
     </div>
 
     <script>
+        // Funkce pro rozbalování/zabalování kategorií
         function toggleCategory(headerElement) {
             const container = headerElement.nextElementSibling;
             const icon = headerElement.querySelector('.toggle-icon');
@@ -63,71 +62,41 @@
             }
         }
 
-        // TADY SE NAČÍTÁ TVŮJ NOVÝ SOUBOR
-        fetch('data_2.xlsx').then(res => {
+        fetch('data.xlsx').then(res => {
             if (!res.ok) throw new Error("Soubor nenalezen");
             return res.arrayBuffer();
         }).then(data => {
             const workbook = XLSX.read(data, {type: 'array'});
-            const rows = XLSX.utils.sheet_to_json(workbook.Sheets['Agenda detail']);
+            const firstSheetName = workbook.SheetNames[0];
+            const rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName]);
             
             const categories = {};
             rows.forEach(row => {
                 const cat = row['Oblast 2'];
                 if (!cat) return;
-                if (!categories[cat]) categories[cat] = { items: [], totalPct: 0, count: 0 };
-                
-                categories[cat].items.push(row);
-                
-                let pctValue = row['% Hotovo'];
-                let parsedPct = 0;
-                if (typeof pctValue === 'number') {
-                    parsedPct = pctValue <= 1 ? pctValue * 100 : pctValue;
-                } else if (typeof pctValue === 'string') {
-                    parsedPct = parseFloat(pctValue.replace('%', ''));
-                    if (isNaN(parsedPct)) parsedPct = 0;
-                }
-                categories[cat].totalPct += parsedPct;
-                categories[cat].count++;
+                if (!categories[cat]) categories[cat] = [];
+                categories[cat].push(row);
             });
 
             let html = '';
-            for (const [name, catData] of Object.entries(categories)) {
-                const avgPct = catData.count > 0 ? Math.round(catData.totalPct / catData.count) : 0;
-                
+            for (const [name, items] of Object.entries(categories)) {
+                // Rozbalovací hlavička (bez procent)
                 html += `<div class="category">
                             <div class="category-header" onclick="toggleCategory(this)">
-                                <div class="category-title-wrapper">
-                                    <h2>${name}</h2>
-                                    <span class="cat-pct-badge">Hotovo: ${avgPct} %</span>
-                                </div>
+                                <h2>${name}</h2>
                                 <span class="toggle-icon">+</span>
                             </div>
                             <div class="agendas-container">`;
                 
-                catData.items.forEach(item => {
-                    // TADY SE BERE SEMAFOR PRO OBARVENÍ
-                    const color = item['Semafor'] ? String(item['Semafor']).trim() : 'Šedá';
-                    
-                    // TADY SE BERE TVOJE FÁZE (TEXTOVÝ STAV)
-                    const phase = item['Fáze'] ? String(item['Fáze']).trim() : 'Fáze neurčena';
-                    
-                    let itemPct = item['% Hotovo'];
-                    let finalItemPct = 0;
-                    if (typeof itemPct === 'number') {
-                        finalItemPct = itemPct <= 1 ? itemPct * 100 : itemPct;
-                    } else if (typeof itemPct === 'string') {
-                        finalItemPct = parseFloat(itemPct.replace('%', ''));
-                        if (isNaN(finalItemPct)) finalItemPct = 0;
-                    }
+                items.forEach(item => {
+                    // Logika fáze (statusu)
+                    const phase = item['Fáze'] ? String(item['Fáze']).trim() : 'Nespecifikováno';
+                    const phaseClass = phase.split(' ')[0]; // Získá první slovo (např. 'Hotovo', 'Probíhá', 'V') pro CSS třídu
 
-                    html += `<div class="agenda ${color}">
+                    html += `<div class="agenda ${phaseClass}">
                         <div class="agenda-header">
-                            <div class="agenda-title-wrapper">
-                                <h3>${item['Agenda'] || 'Neznámá agenda'}</h3>
-                                <span class="agenda-pct">${Math.round(finalItemPct)} %</span>
-                            </div>
-                            <span class="phase-badge">${phase}</span>
+                            <h3>${item['Agenda'] || 'Neznámá agenda'}</h3>
+                            <span class="status-badge">${phase}</span>
                         </div>
                         <div class="grid">
                             <div><strong>Co se udělalo (minulost):</strong>${item['Co se udělalo'] || '—'}</div>
@@ -142,7 +111,7 @@
         }).catch(err => {
             document.getElementById('app').innerHTML = '';
             document.getElementById('error-msg').style.display = 'block';
-            document.getElementById('error-msg').innerHTML = 'Chyba při načítání dat. Ujistěte se, že soubor "data_2.xlsx" je nahrán a obsahuje list "Agenda detail" se správnými sloupci.';
+            document.getElementById('error-msg').innerHTML = 'Chyba při načítání dat. Ujistěte se, že soubor "data.xlsx" je nahrán a obsahuje list "Agenda detail" se sloupcem "Fáze".';
             console.error(err);
         });
     </script>
